@@ -27,7 +27,7 @@ app.get('/directors/:id', (req, res) => {
   })
 })
 
-app.post('/directors', (req, res) => {
+app.post('/directors', authenticateToken, (req, res) => {
   const { name, birthYear } = req.body
   if (!name || !birthYear) return res.status(400).json({ error: 'name dan birthYear wajib diisi' })
   const sql = 'INSERT INTO directors (name, birthYear) VALUES (?,?)'
@@ -37,7 +37,7 @@ app.post('/directors', (req, res) => {
   })
 })
 
-app.put('/directors/:id', (req, res) => {
+app.put('/directors/:id',authenticateToken, (req, res) => {
   const { name, birthYear } = req.body
   const id = Number(req.params.id)
   if (!name || !birthYear) return res.status(400).json({ error: 'name dan birthYear wajib diisi' })
@@ -49,7 +49,7 @@ app.put('/directors/:id', (req, res) => {
   })
 })
 
-app.delete('/directors/:id', (req, res) => {
+app.delete('/directors/:id',authenticateToken, (req, res) => {
   const sql = 'DELETE FROM directors WHERE id = ?'
   const id = Number(req.params.id)
   dbDirectors.run(sql, id, function(err) {
@@ -145,4 +145,10 @@ app.post('/auth/login', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server berjalan di http://localhost:${port}`)
+})
+
+app.get('/profile', authenticateToken, (req, res) => {
+  res.json({
+    massage: 'Token Valid', user: req.user.user
+  })
 })
