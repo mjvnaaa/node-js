@@ -9,6 +9,10 @@ const JWT_SECRET = process.env.JWT_SECRET
 const authenticateToken = require('./middleware/authMiddleware')
 app.use(express.json())
 
+app.get('/', (req, res) => {
+    res.send('Selamat datang di Rest API!');
+})
+
 app.get('/directors', (req, res) => {
   const sql = "SELECT * FROM directors ORDER BY id ASC"
   dbDirectors.all(sql, [], (err, rows) => {
