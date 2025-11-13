@@ -1,4 +1,3 @@
-// Ini adalah isi BARU untuk database.js
 const { Pool } = require('pg');
 
 const pool = new Pool({

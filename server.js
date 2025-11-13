@@ -6,7 +6,9 @@ const pool = require('./database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
-const authenticateToken = require('./middleware/authMiddleware');
+
+const { authenticateToken, authorizeRole } = require('./middleware/auth.js');
+
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -50,7 +52,7 @@ app.post('/directors', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/directors/:id', authenticateToken, async (req, res) => {
+app.put('/directors/:id', [authenticateToken, authorizeRole('admin')], async (req, res) => {
   const { name, birthYear } = req.body;
   const id = Number(req.params.id);
   if (!name || !birthYear) return res.status(400).json({ error: 'name dan birthYear wajib diisi' });
@@ -64,7 +66,7 @@ app.put('/directors/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/directors/:id', authenticateToken, async (req, res) => {
+app.delete('/directors/:id', [authenticateToken, authorizeRole('admin')], async (req, res) => {
   const sql = 'DELETE FROM directors WHERE id = $1';
   const id = Number(req.params.id);
   try {
@@ -108,12 +110,13 @@ app.post('/movies', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(sql, [title, director, year]);
     res.status(201).json({ id: result.rows[0].id, title, director, year });
-  } catch (err) {
+  } catch (err)
+ {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/movies/:id', authenticateToken, async (req, res) => {
+app.put('/movies/:id', [authenticateToken, authorizeRole('admin')], async (req, res) => {
   const { title, director, year } = req.body;
   const id = Number(req.params.id);
   if (!title || !director || !year) return res.status(400).json({ error: 'title, director, dan year wajib diisi' });
@@ -127,7 +130,7 @@ app.put('/movies/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/movies/:id', authenticateToken, async (req, res) => {
+app.delete('/movies/:id', [authenticateToken, authorizeRole('admin')], async (req, res) => {
   const sql = 'DELETE FROM movies WHERE id = $1';
   const id = Number(req.params.id);
   try {
@@ -145,8 +148,8 @@ app.post('/auth/register', async (req, res) => {
   
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const sql = 'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id';
-    const params = [username.toLowerCase(), hashedPassword];
+    const sql = 'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id';
+    const params = [username.toLowerCase(), hashedPassword, 'user'];
     
     const result = await pool.query(sql, params);
     res.status(201).json({ message: 'Registrasi berhasil', userId: result.rows[0].id });
@@ -158,6 +161,27 @@ app.post('/auth/register', async (req, res) => {
     res.status(500).json({ error: 'Gagal memproses pendaftaran' });
   }
 });
+
+app.post('/auth/register-admin', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password || password.length < 6) return res.status(400).json({ error: 'Username dan password (min 6 char) harus diisi' });
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const sql = 'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id';
+    const params = [username.toLowerCase(), hashedPassword, 'admin'];
+    
+    const result = await pool.query(sql, params);
+    res.status(201).json({ message: 'Admin berhasil dibuat', userId: result.rows[0].id });
+
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Username admin sudah ada' });
+    }
+    res.status(500).json({ error: 'Gagal memproses pendaftaran admin' });
+  }
+});
+
 
 app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -174,7 +198,14 @@ app.post('/auth/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: 'Kredensial tidak valid' });
 
-    const payload = { user: { id: user.id, username: user.username } };
+    const payload = { 
+      user: { 
+        id: user.id, 
+        username: user.username,
+        role: user.role
+      } 
+    };
+
     jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
       if (err) return res.status(500).json({ error: 'Gagal membuat token' });
       res.json({ message: 'Login berhasil', token: token });
@@ -187,7 +218,8 @@ app.post('/auth/login', async (req, res) => {
 
 app.get('/profile', authenticateToken, (req, res) => {
   res.json({
-    message: 'Token Valid', user: req.user.user
+    message: 'Token Valid', 
+    user: req.user
   });
 });
 
